@@ -67,6 +67,7 @@ export class Game {
     this.controls = new PointerLockControls(this.camera, document.body);
     this.player = new Player(this.camera, this.arenaHalfSize);
     this.weapon = new Weapon();
+    this.obstacles = [];
     this.targetManager = new TargetManager(
       this.scene,
       this.arenaHalfSize,
@@ -184,10 +185,12 @@ export class Game {
       obstacle.position.set(x, y, z);
       obstacle.castShadow = true;
       obstacle.receiveShadow = true;
+      this.obstacles.push(obstacle);
       obstacleGroup.add(obstacle);
     });
 
     this.scene.add(obstacleGroup);
+    this.targetManager.setObstacles(this.obstacles);
   }
 
   bindEvents() {

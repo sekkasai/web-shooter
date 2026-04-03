@@ -1,4 +1,5 @@
 import {
+  Box3,
   Color,
   Mesh,
   MeshStandardMaterial,
@@ -7,6 +8,7 @@ import {
 } from "three";
 
 const TEMP_VECTOR = new Vector3();
+const TEMP_BOX = new Box3();
 
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
@@ -21,6 +23,15 @@ export class TargetManager {
     this.geometry = new SphereGeometry(0.6, 24, 24);
     this.targets = [];
     this.pendingRespawns = [];
+    this.obstacles = [];
+    this.obstacleBounds = [];
+  }
+
+  setObstacles(obstacles) {
+    this.obstacles = [...obstacles];
+    this.obstacleBounds = this.obstacles.map((obstacle) =>
+      new Box3().setFromObject(obstacle)
+    );
   }
 
   reset(playerPosition) {
@@ -63,8 +74,12 @@ export class TargetManager {
   }
 
   handleShot(raycaster) {
+    const colliders = [
+      ...this.obstacles,
+      ...this.targets.map((target) => target.mesh)
+    ];
     const hit = raycaster.intersectObjects(
-      this.targets.map((target) => target.mesh),
+      colliders,
       false
     )[0];
 
@@ -90,7 +105,8 @@ export class TargetManager {
   }
 
   spawnTarget(playerPosition) {
-    const position = this.findSpawnPosition(playerPosition);
+    const scale = randomBetween(0.85, 1.35);
+    const position = this.findSpawnPosition(playerPosition, scale);
     const hue = randomBetween(0.02, 0.11);
     const material = new MeshStandardMaterial({
       color: new Color().setHSL(hue, 0.85, 0.56),
@@ -100,7 +116,6 @@ export class TargetManager {
     });
 
     const mesh = new Mesh(this.geometry, material);
-    const scale = randomBetween(0.85, 1.35);
     mesh.scale.setScalar(scale);
     mesh.position.copy(position);
     mesh.castShadow = true;
@@ -116,35 +131,57 @@ export class TargetManager {
     });
   }
 
-  findSpawnPosition(playerPosition) {
+  findSpawnPosition(playerPosition, scale) {
     const margin = 3;
+    const targetRadius = this.geometry.parameters.radius * scale;
 
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
       const candidate = new Vector3(
         randomBetween(-this.arenaHalfSize + margin, this.arenaHalfSize - margin),
         randomBetween(1.5, 5.5),
         randomBetween(-this.arenaHalfSize + margin, this.arenaHalfSize - margin)
       );
 
-      if (candidate.distanceTo(playerPosition) < 8) {
-        continue;
-      }
-
-      const overlaps = this.targets.some((target) => {
-        TEMP_VECTOR.copy(target.basePosition);
-        TEMP_VECTOR.y = candidate.y;
-        return TEMP_VECTOR.distanceTo(candidate) < 3;
-      });
-
-      if (!overlaps) {
+      if (this.isSpawnPositionClear(candidate, playerPosition, targetRadius)) {
         return candidate;
       }
     }
 
-    return new Vector3(
-      randomBetween(-this.arenaHalfSize + margin, this.arenaHalfSize - margin),
-      randomBetween(1.5, 5.5),
-      randomBetween(-this.arenaHalfSize + margin, this.arenaHalfSize - margin)
-    );
+    for (let x = -this.arenaHalfSize + margin; x <= this.arenaHalfSize - margin; x += 2) {
+      for (let z = -this.arenaHalfSize + margin; z <= this.arenaHalfSize - margin; z += 2) {
+        for (let y = 1.5; y <= 5.5; y += 1) {
+          const candidate = new Vector3(x, y, z);
+
+          if (this.isSpawnPositionClear(candidate, playerPosition, targetRadius)) {
+            return candidate;
+          }
+        }
+      }
+    }
+
+    return playerPosition.clone().add(new Vector3(0, 4, -10));
+  }
+
+  isSpawnPositionClear(candidate, playerPosition, targetRadius) {
+    const obstaclePadding = 0.2;
+
+    if (candidate.distanceTo(playerPosition) < 8) {
+      return false;
+    }
+
+    const overlapsTarget = this.targets.some((target) => {
+      TEMP_VECTOR.copy(target.basePosition);
+      TEMP_VECTOR.y = candidate.y;
+      return TEMP_VECTOR.distanceTo(candidate) < 3;
+    });
+
+    if (overlapsTarget) {
+      return false;
+    }
+
+    return !this.obstacleBounds.some((bounds) => {
+      TEMP_BOX.copy(bounds);
+      return TEMP_BOX.distanceToPoint(candidate) < targetRadius + obstaclePadding;
+    });
   }
 }
