@@ -10,12 +10,13 @@ import {
   Vector3
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { assetPath } from "./assetPath.js";
 
 const MODEL_PATHS = {
-  pistol: "/models/weapons/p320.glb",
-  suppressor: "/models/weapons/suppressor.glb",
-  redDot: "/models/weapons/red-dot.glb",
-  flashlight: "/models/weapons/flashlight.glb"
+  pistol: assetPath("models/weapons/p320.glb"),
+  suppressor: assetPath("models/weapons/suppressor.glb"),
+  redDot: assetPath("models/weapons/red-dot.glb"),
+  flashlight: assetPath("models/weapons/flashlight.glb")
 };
 
 const TEMP_BOX = new Box3();
