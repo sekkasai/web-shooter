@@ -13,6 +13,7 @@ import {
   PlaneGeometry,
   Raycaster,
   Scene,
+  Vector3,
   Vector2,
   WebGLRenderer
 } from "three";
@@ -22,8 +23,10 @@ import { TargetManager } from "./targets.js";
 import { UI } from "./ui.js";
 import { FirstPersonWeapon } from "./firstPersonWeapon.js";
 import { Weapon } from "./weapon.js";
+import { randomBetween } from "./random.js";
 
-const TARGET_COUNT = 10;
+const TARGET_COUNT = 6;
+const OBSTACLE_COUNT = 6;
 
 export class Game {
   constructor(root) {
@@ -56,6 +59,7 @@ export class Game {
     this.clock = new Clock();
     this.raycaster = new Raycaster();
     this.screenCenter = new Vector2(0, 0);
+    this.playerViewDirection = new Vector3(0, 0, -1);
     this.arenaHalfSize = 22;
     this.timeLimit = 60;
     this.state = "menu";
@@ -79,6 +83,8 @@ export class Game {
     this.weapon = new Weapon();
     this.firstPersonWeapon = new FirstPersonWeapon(this.weaponCamera);
     this.obstacles = [];
+    this.obstacleGroup = new Group();
+    this.obstacleMaterial = null;
     this.targetManager = new TargetManager(
       this.scene,
       this.arenaHalfSize,
@@ -185,32 +191,95 @@ export class Game {
       this.scene.add(wall);
     });
 
-    const obstacleGeometry = new BoxGeometry(3.8, 3.8, 3.8);
-    const obstacleMaterial = new MeshStandardMaterial({
+    this.obstacleMaterial = new MeshStandardMaterial({
       color: "#e5aa51",
       roughness: 0.7,
       metalness: 0.12
     });
-    const obstacleGroup = new Group();
-    const obstaclePositions = [
-      [-10, 1.9, -8],
-      [9, 1.9, -4],
-      [-6, 1.9, 9],
-      [11, 1.9, 8]
-    ];
+    this.scene.add(this.obstacleGroup);
+  }
 
-    obstaclePositions.forEach(([x, y, z]) => {
-      const obstacle = new Mesh(obstacleGeometry, obstacleMaterial);
-      obstacle.position.set(x, y, z);
+  createRandomObstacles(material) {
+    const obstacles = [];
+    const playerStart = new Vector3(0, 0, 14);
+    const margin = 4;
+    const minHeight = this.targetManager.getTargetHeight() + 0.6;
+    const maxHeight = minHeight + 3.4;
+
+    for (let attempt = 0; obstacles.length < OBSTACLE_COUNT && attempt < 120; attempt += 1) {
+      const size = {
+        x: randomBetween(2.8, 5.6),
+        y: randomBetween(minHeight, maxHeight),
+        z: randomBetween(2.8, 5.6)
+      };
+      const halfX = size.x * 0.5;
+      const halfZ = size.z * 0.5;
+      const position = new Vector3(
+        randomBetween(-this.arenaHalfSize + margin + halfX, this.arenaHalfSize - margin - halfX),
+        size.y * 0.5,
+        randomBetween(-this.arenaHalfSize + margin + halfZ, this.arenaHalfSize - margin - halfZ)
+      );
+
+      if (!this.isObstaclePlacementClear(position, size, playerStart, obstacles)) {
+        continue;
+      }
+
+      const obstacle = new Mesh(new BoxGeometry(size.x, size.y, size.z), material);
+      obstacle.position.copy(position);
       obstacle.castShadow = true;
       obstacle.receiveShadow = true;
-      this.obstacles.push(obstacle);
-      obstacleGroup.add(obstacle);
-    });
+      obstacles.push(obstacle);
+    }
 
-    this.scene.add(obstacleGroup);
+    return obstacles;
+  }
+
+  refreshObstacles(material = null) {
+    if (material) {
+      this.obstacleMaterial = material;
+    }
+
+    if (!this.obstacleMaterial) {
+      return;
+    }
+
+    this.disposeObstacles();
+    this.obstacleGroup.clear();
+    this.obstacles = this.createRandomObstacles(this.obstacleMaterial);
+    this.obstacles.forEach((obstacle) => {
+      this.obstacleGroup.add(obstacle);
+    });
     this.player.setObstacles(this.obstacles);
     this.targetManager.setObstacles(this.obstacles);
+  }
+
+  disposeObstacles() {
+    this.obstacles.forEach((obstacle) => {
+      obstacle.geometry.dispose();
+    });
+  }
+
+  isObstaclePlacementClear(position, size, playerStart, obstacles) {
+    const playerClearance = 8.5;
+    const obstacleGap = 3.5;
+    const dxToPlayer = Math.max(Math.abs(position.x - playerStart.x) - size.x * 0.5, 0);
+    const dzToPlayer = Math.max(Math.abs(position.z - playerStart.z) - size.z * 0.5, 0);
+
+    if (Math.hypot(dxToPlayer, dzToPlayer) < playerClearance) {
+      return false;
+    }
+
+    return !obstacles.some((obstacle) => {
+      const otherSize = obstacle.geometry.parameters;
+      const xGap =
+        Math.abs(position.x - obstacle.position.x) -
+        (size.x + otherSize.width) * 0.5;
+      const zGap =
+        Math.abs(position.z - obstacle.position.z) -
+        (size.z + otherSize.depth) * 0.5;
+
+      return xGap < obstacleGap && zGap < obstacleGap;
+    });
   }
 
   bindEvents() {
@@ -309,7 +378,11 @@ export class Game {
     this.weapon.reset();
     this.firstPersonWeapon.reset();
     this.player.reset();
-    this.targetManager.reset(this.player.getPosition());
+    this.refreshObstacles();
+    this.targetManager.reset(
+      this.player.getPosition(),
+      this.getPlayerViewDirection()
+    );
     this.updateHud();
   }
 
@@ -541,6 +614,7 @@ export class Game {
     requestAnimationFrame(this.animate);
 
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
+    const playerViewDirection = this.getPlayerViewDirection();
 
     if (this.state === "running") {
       this.player.update(deltaSeconds);
@@ -554,7 +628,12 @@ export class Game {
         this.updateHud();
       }
 
-      this.targetManager.update(deltaSeconds, this.player.getPosition(), true);
+      this.targetManager.update(
+        deltaSeconds,
+        this.player.getPosition(),
+        playerViewDirection,
+        true
+      );
       this.timeLeft = Math.max(0, this.timeLeft - deltaSeconds);
 
       if (this.timeLeft === 0) {
@@ -563,7 +642,12 @@ export class Game {
 
       this.updateHud();
     } else {
-      this.targetManager.update(deltaSeconds, this.player.getPosition(), false);
+      this.targetManager.update(
+        deltaSeconds,
+        this.player.getPosition(),
+        playerViewDirection,
+        false
+      );
     }
 
     this.firstPersonWeapon.update(
@@ -617,6 +701,19 @@ export class Game {
 
   canUseMobileControls() {
     return this.isMobile && this.state === "running" && this.isLandscape();
+  }
+
+  getPlayerViewDirection() {
+    this.camera.getWorldDirection(this.playerViewDirection);
+    this.playerViewDirection.y = 0;
+
+    if (this.playerViewDirection.lengthSq() === 0) {
+      this.playerViewDirection.set(0, 0, -1);
+    } else {
+      this.playerViewDirection.normalize();
+    }
+
+    return this.playerViewDirection;
   }
 
   startMobileRound() {
