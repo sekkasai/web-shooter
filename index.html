@@ -1,14 +1,20 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0f1b24" />
+    <meta name="theme-color" content="#0086CC" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800&family=Zen+Dots&display=swap"
+    />
     <link rel="icon" type="image/png" href="%BASE_URL%favicon.png" />
     <title>Target Rush FPS</title>
     <script type="module" src="/src/main.js"></script>
@@ -16,21 +22,19 @@
   <body>
     <div id="app">
       <div class="hud">
-        <div class="hud__stats">
-          <div class="hud__item">
-            <span class="hud__label">SCORE</span>
-            <strong class="hud__value" id="score">0</strong>
-          </div>
-          <div class="hud__item">
-            <span class="hud__label">TIME</span>
-            <strong class="hud__value" id="time">60.0</strong>
-          </div>
-          <div class="hud__item">
-            <span class="hud__label">AMMO</span>
-            <strong class="hud__value" id="ammo">30 / 30</strong>
-          </div>
+        <div class="hud__time">
+          <span class="hud__label hud__label--time" id="time-label">TIME</span>
+          <strong class="hud__value hud__value--time" id="time">60.0</strong>
         </div>
-        <div class="hud__status" id="status">클릭해서 게임을 시작하세요</div>
+        <div class="hud__status" id="status">スタートしてミッションを始めましょう</div>
+        <div class="hud__score">
+          <span class="hud__label hud__label--score" id="score-label">SCORE</span>
+          <strong class="hud__value hud__value--score" id="score">0</strong>
+        </div>
+        <div class="hud__ammo">
+          <span class="hud__label hud__label--ammo" id="ammo-label">AMMO</span>
+          <strong class="hud__value hud__value--ammo" id="ammo">30 / 30</strong>
+        </div>
         <div class="crosshair" aria-hidden="true">
           <span></span>
           <span></span>
@@ -39,7 +43,7 @@
 
       <div class="mobile-controls" id="mobile-controls" aria-hidden="true">
         <div class="mobile-controls__look-zone" id="look-zone">
-          <span class="mobile-controls__look-label">DRAG TO AIM</span>
+          <span class="mobile-controls__look-label" id="look-label">DRAG TO AIM</span>
         </div>
 
         <div class="mobile-controls__move">
@@ -50,14 +54,15 @@
           </div>
         </div>
 
+        <button
+          class="mobile-controls__button mobile-controls__button--jump"
+          id="jump-button"
+          type="button"
+        >
+          JUMP
+        </button>
+
         <div class="mobile-controls__actions">
-          <button
-            class="mobile-controls__button mobile-controls__button--jump"
-            id="jump-button"
-            type="button"
-          >
-            JMP
-          </button>
           <button
             class="mobile-controls__button mobile-controls__button--fire"
             id="fire-button"
@@ -77,26 +82,61 @@
 
       <div class="orientation-lock" id="orientation-lock">
         <div class="orientation-lock__panel">
-          <p class="orientation-lock__eyebrow">MOBILE MODE</p>
-          <h2 class="orientation-lock__title">가로 모드로 돌려주세요</h2>
-          <p class="orientation-lock__body">
-            모바일에서는 landscape 화면에서만 플레이할 수 있습니다. 기기를 가로로 돌리면
-            자동으로 이어집니다.
+          <p class="orientation-lock__eyebrow" id="orientation-eyebrow">MOBILE MODE</p>
+          <h2 class="orientation-lock__title" id="orientation-title">横向きにしてください</h2>
+          <p class="orientation-lock__body" id="orientation-body">
+            モバイルでは横向き画面でのみプレイできます。端末を横向きにすると自動で再開します。
           </p>
         </div>
       </div>
 
       <div class="screen screen--visible" id="screen">
-        <div class="screen__panel">
-          <p class="screen__eyebrow" id="screen-eyebrow">THREE.JS FPS</p>
-          <h1 class="screen__title" id="screen-title">Target Rush</h1>
-          <p class="screen__body" id="screen-body">
-            WASD로 이동하고 마우스로 조준하세요. 좌클릭으로 사격, R로 재장전합니다.
-            60초 동안 떠다니는 타겟을 최대한 많이 맞혀 보세요.
-          </p>
-          <button class="screen__button" id="screen-button" type="button">
-            게임 시작
-          </button>
+        <div class="screen__panel" id="screen-panel">
+          <div class="screen__layout">
+            <div class="screen__title-block">
+              <p class="screen__eyebrow" id="screen-eyebrow">THREE.JS FPS</p>
+              <h1 class="screen__title" id="screen-title">TARGET RUSH</h1>
+            </div>
+            <div class="screen__actions">
+              <div class="screen__info-card">
+                <p class="screen__body" id="screen-body">
+                  WASDで移動し、マウスで照準します。クリックで射撃、Spaceでジャンプ、Rでリロード。開始すると、前方の障害物のまわりに6つのターゲットが出現します。
+                </p>
+                <div class="screen__locale screen__locale--visible" id="screen-locale">
+                  <span class="screen__locale-label" id="locale-label">LANGUAGE</span>
+                  <div class="screen__locale-options" role="group" aria-label="Language">
+                    <button
+                      class="screen__locale-button screen__locale-button--active"
+                      data-locale="ja"
+                      type="button"
+                      aria-pressed="true"
+                    >
+                      日本語
+                    </button>
+                    <button
+                      class="screen__locale-button"
+                      data-locale="en"
+                      type="button"
+                      aria-pressed="false"
+                    >
+                      English
+                    </button>
+                    <button
+                      class="screen__locale-button"
+                      data-locale="kr"
+                      type="button"
+                      aria-pressed="false"
+                    >
+                      한국어
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button class="screen__button" id="screen-button" type="button">
+                ゲーム開始
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
