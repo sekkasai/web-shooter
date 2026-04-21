@@ -122,6 +122,10 @@ export class Player {
     return this.movementAmount;
   }
 
+  isOnGround() {
+    return this.isGrounded;
+  }
+
   jump() {
     if (!this.isGrounded) {
       return false;

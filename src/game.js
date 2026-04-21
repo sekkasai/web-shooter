@@ -24,6 +24,7 @@ import { UI } from "./ui.js";
 import { FirstPersonWeapon } from "./firstPersonWeapon.js";
 import { Weapon } from "./weapon.js";
 import { randomBetween } from "./random.js";
+import { AudioManager } from "./audioManager.js";
 
 const TARGET_COUNT = 6;
 const OBSTACLE_COUNT = 6;
@@ -82,6 +83,7 @@ export class Game {
     this.player = new Player(this.camera, this.arenaHalfSize);
     this.weapon = new Weapon();
     this.firstPersonWeapon = new FirstPersonWeapon(this.weaponCamera);
+    this.audio = new AudioManager();
     this.obstacles = [];
     this.obstacleGroup = new Group();
     this.obstacleMaterial = null;
@@ -306,6 +308,7 @@ export class Game {
       this.player.clearInput();
 
       if (this.state === "running") {
+        this.audio.reset();
         this.state = "paused";
         this.ui.showPause();
       }
@@ -375,6 +378,7 @@ export class Game {
     this.mobilePortraitPaused = false;
     this.mobileStartQueued = false;
     this.releaseMobilePointers();
+    this.audio.reset();
     this.weapon.reset();
     this.firstPersonWeapon.reset();
     this.player.reset();
@@ -403,6 +407,7 @@ export class Game {
 
     if (this.state === "running") {
       this.mobilePortraitPaused = false;
+      this.audio.reset();
       this.state = "paused";
       this.ui.configureScreen({
         eyebrow: "FULLSCREEN OFF",
@@ -425,6 +430,7 @@ export class Game {
       return;
     }
 
+    this.audio.unlock();
     this.fireShot();
   }
 
@@ -443,6 +449,7 @@ export class Game {
       const reloadingStarted = this.weapon.requestReload();
 
       if (reloadingStarted) {
+        this.audio.playReload(this.weapon.reloadDuration);
         this.firstPersonWeapon.triggerReload(this.weapon.reloadDuration);
         this.updateHud();
       }
@@ -454,6 +461,8 @@ export class Game {
   }
 
   async handleStart() {
+    await this.audio.unlock();
+
     if (this.state === "ended" || this.state === "menu") {
       this.resetRound();
     }
@@ -557,6 +566,7 @@ export class Game {
     }
 
     event.preventDefault();
+    this.audio.unlock();
     this.mobileFireHeld = true;
     this.fireShot();
   }
@@ -573,6 +583,7 @@ export class Game {
 
     event.preventDefault();
     if (this.weapon.requestReload()) {
+      this.audio.playReload(this.weapon.reloadDuration);
       this.firstPersonWeapon.triggerReload(this.weapon.reloadDuration);
       this.updateHud();
     }
@@ -603,6 +614,7 @@ export class Game {
     this.player.clearInput();
     this.player.setJoystick(0, 0);
     this.mobileFireHeld = false;
+    this.audio.reset();
     this.ui.setMobileControlsVisible(false);
     if (this.controls.isLocked) {
       this.controls.unlock();
@@ -617,7 +629,18 @@ export class Game {
     const playerViewDirection = this.getPlayerViewDirection();
 
     if (this.state === "running") {
+      const wasGrounded = this.player.isOnGround();
       this.player.update(deltaSeconds);
+
+      if (!wasGrounded && this.player.isOnGround()) {
+        this.audio.playJump();
+      }
+
+      this.audio.updateMovement(
+        deltaSeconds,
+        this.player.getMovementAmount(),
+        this.player.isOnGround()
+      );
 
       if (this.isMobile && this.mobileFireHeld) {
         this.fireShot();
@@ -671,9 +694,11 @@ export class Game {
       return false;
     }
 
+    this.audio.playShot();
     this.firstPersonWeapon.triggerFire();
 
     if (shot.autoReloaded) {
+      this.audio.playReload(this.weapon.reloadDuration);
       this.firstPersonWeapon.triggerReload(this.weapon.reloadDuration);
     }
 
@@ -681,6 +706,7 @@ export class Game {
     const hit = this.targetManager.handleShot(this.raycaster);
 
     if (hit) {
+      this.audio.playHit();
       this.score += hit.points;
     }
 
@@ -765,6 +791,7 @@ export class Game {
 
     if (this.state === "running") {
       this.mobilePortraitPaused = true;
+      this.audio.reset();
       this.state = "paused";
     }
   }
